@@ -32,11 +32,13 @@ app = Flask(__name__)
 DEFAULT_SCAN_PV = "32id:TomoScan:ScanStatus"
 DEFAULT_SHUTTER_A_PV = "PB:32ID:STA_A_FES_CLSD_PL"
 DEFAULT_SHUTTER_B_PV = "PB:32ID:STA_B_SBS_CLSD_PL"
+DEFAULT_FILE_PV = "32idbSP1:HDF1:FullFileName_RBV"  # name/path of the last scan
 
 status_cache = {
     "scan_status": None,
     "shutter_A": None,
     "shutter_B": None,
+    "current_file": None,
     "reconstruction": None,
     "updated_at": None,
     "error": None,
@@ -62,9 +64,23 @@ def read_pv_value(pv_name, timeout=2.0):
         return None, f"error: {ex}"
 
 
-def compute_recon_status(data_folder):
-    """Based on tomogui logic in refresh_main_table() from Software/tomogui."""
-    path = os.path.expanduser(data_folder)
+def compute_recon_status(data_folder, last_scan_file=None):
+    """Based on tomogui logic in refresh_main_table() from Software/tomogui.
+
+    If `last_scan_file` is provided and points to a valid file, derive the data folder
+    from its directory; otherwise use explicit `data_folder`.
+    """
+    path = None
+    if last_scan_file:
+        candidate = os.path.expanduser(str(last_scan_file))
+        if os.path.isfile(candidate):
+            path = os.path.dirname(candidate)
+        else:
+            path = None
+
+    if not path:
+        path = os.path.expanduser(data_folder)
+
     if not path or not os.path.isdir(path):
         return {
             "available": False,
@@ -123,15 +139,18 @@ def compute_recon_status(data_folder):
     }
 
 
-def refresh_status(scan_pv, shutter_a, shutter_b, data_folder):
+def refresh_status(scan_pv, shutter_a, shutter_b, data_folder, file_pv):
     out = {
         "scan_status": {"value": None, "info": "not-set"},
         "shutter_A": {"value": None, "info": "not-set"},
         "shutter_B": {"value": None, "info": "not-set"},
+        "current_file": {"value": None, "info": "not-set", "pv": file_pv},
         "reconstruction": None,
         "updated_at": datetime.utcnow().isoformat() + "Z",
         "error": None,
     }
+
+    last_scan_file = None
 
     try:
         v, info = read_pv_value(scan_pv)
@@ -143,20 +162,24 @@ def refresh_status(scan_pv, shutter_a, shutter_b, data_folder):
         v, info = read_pv_value(shutter_b)
         out["shutter_B"] = {"value": v, "info": info, "pv": shutter_b}
 
+        v, info = read_pv_value(file_pv)
+        last_scan_file = v if v else None
+        out["current_file"] = {"value": v, "info": info, "pv": file_pv}
+
     except Exception as ex:
         out["error"] = f"EPICS query exception: {ex}"
 
-    out["reconstruction"] = compute_recon_status(data_folder)
+    out["reconstruction"] = compute_recon_status(data_folder, last_scan_file=last_scan_file)
     out["updated_at"] = datetime.utcnow().isoformat() + "Z"
 
     with status_lock:
         status_cache.update(out)
 
 
-def background_updater(scan_pv, shutter_a, shutter_b, data_folder, interval=5):
+def background_updater(scan_pv, shutter_a, shutter_b, data_folder, file_pv, interval=5):
     while True:
         try:
-            refresh_status(scan_pv, shutter_a, shutter_b, data_folder)
+            refresh_status(scan_pv, shutter_a, shutter_b, data_folder, file_pv)
         except Exception as ex:
             with status_lock:
                 status_cache["error"] = str(ex)
@@ -197,6 +220,11 @@ th { background: #f8fafc; font-size: 0.87rem; color: #334155; }
       <h2>Scan Engine</h2>
       <p><span class="status-label">PV</span><code>{{ scan_pv }}</code></p>
       <p><span class="status-label">Value</span><strong id="scan_value">-</strong> <span class="tooltip-small">(<span id="scan_info">-</span>)</span></p>
+    </div>
+    <div class="card">
+      <h2>Last scan file</h2>
+      <p><span class="status-label">PV</span><code>{{ file_pv }}</code></p>
+      <p><span class="status-label">Path</span><span id="current_file">-</span></p>
     </div>
     <div class="card">
       <h2>Shutters</h2>
@@ -258,6 +286,7 @@ async function refresh() {
     document.getElementById('updated_at').innerText = j.updated_at || '-';
     document.getElementById('scan_value').innerText = j.scan_status.value || '-';
     document.getElementById('scan_info').innerText = j.scan_status.info || '-';
+    document.getElementById('current_file').innerText = j.current_file?.value || '-';
     updateShutterBadge('shutterA', j.shutter_A.value);
     document.getElementById('shutterA_info').innerText = j.shutter_A.info || '-';
     updateShutterBadge('shutterB', j.shutter_B.value);
@@ -310,6 +339,7 @@ def index():
          scan_pv=app.config.get('SCAN_PV', DEFAULT_SCAN_PV),
          shutter_a_pv=app.config.get('SHUTTER_A_PV', DEFAULT_SHUTTER_A_PV),
          shutter_b_pv=app.config.get('SHUTTER_B_PV', DEFAULT_SHUTTER_B_PV),
+         file_pv=app.config.get('FILE_PV', DEFAULT_FILE_PV),
          data_folder=app.config.get('DATA_FOLDER', '(not configured)'),
     )
 
@@ -329,16 +359,18 @@ def main():
     parser.add_argument('--scan-pv', default=DEFAULT_SCAN_PV, help='Scan status PV')
     parser.add_argument('--shutter-a-pv', default=DEFAULT_SHUTTER_A_PV, help='Shutter A PV')
     parser.add_argument('--shutter-b-pv', default=DEFAULT_SHUTTER_B_PV, help='Shutter B PV')
+    parser.add_argument('--file-pv', default=DEFAULT_FILE_PV, help='Full file name PV (last scan path)')
     parser.add_argument('--poll-interval', default=5, type=float, help='status refresh interval seconds')
     args = parser.parse_args()
 
     app.config['SCAN_PV'] = args.scan_pv
     app.config['SHUTTER_A_PV'] = args.shutter_a_pv
     app.config['SHUTTER_B_PV'] = args.shutter_b_pv
+    app.config['FILE_PV'] = args.file_pv
     app.config['DATA_FOLDER'] = args.data_folder
 
-    refresh_status(args.scan_pv, args.shutter_a_pv, args.shutter_b_pv, args.data_folder)
-    t = threading.Thread(target=background_updater, args=(args.scan_pv, args.shutter_a_pv, args.shutter_b_pv, args.data_folder, args.poll_interval), daemon=True)
+    refresh_status(args.scan_pv, args.shutter_a_pv, args.shutter_b_pv, args.data_folder, args.file_pv)
+    t = threading.Thread(target=background_updater, args=(args.scan_pv, args.shutter_a_pv, args.shutter_b_pv, args.data_folder, args.file_pv, args.poll_interval), daemon=True)
     t.start()
 
     print(f"Starting beamline status server on http://{args.host}:{args.port}/")
