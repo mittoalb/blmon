@@ -216,7 +216,7 @@ th { background: #1e293b; font-size: 0.88rem; color: #e2e8f0; }
 </style>
 </head><body>
 <div class="container">
-  <h1 class="page-title">Beamline Monitor (local)</h1>
+  <h1 class="page-title">32ID Beamline Monitor</h1>
   <p class="small-note">Last update: <span id="updated_at">-</span> | Poll interval (s): <input id="poll-interval" type="number" min="1" max="60" value="5" step="1" /> </p>
   <div class="grid">
     <div class="card">
