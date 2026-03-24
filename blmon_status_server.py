@@ -23,8 +23,11 @@ from flask import Flask, jsonify, render_template_string, request
 
 try:
     from epics import PV
-except ImportError:
+except ImportError as ex:
     PV = None
+    import traceback
+    print('WARNING: epics PV class unavailable -- got ImportError:', ex)
+    print(traceback.format_exc())
 
 app = Flask(__name__)
 
@@ -48,7 +51,7 @@ status_lock = threading.Lock()
 
 def read_pv_value(pv_name, timeout=2.0):
     if PV is None:
-        return None, "epics module not installed"
+        return None, "epics module not installed in this Python environment; install pyepics (pip install pyepics) or use the same env as your beamline stack."
 
     try:
         pv = PV(pv_name)
