@@ -58,6 +58,20 @@ def read_pv_value(pv_name, timeout=2.0):
         if not pv.connect(timeout=timeout):
             return None, "pv connect timeout"
 
+        # Try to read as string first (for char arrays and string PVs)
+        try:
+            value = pv.get(as_string=True, timeout=timeout)
+            if value is not None:
+                # Clean up any null terminators
+                if isinstance(value, bytes):
+                    value = value.decode('utf-8', errors='ignore').rstrip('\x00')
+                else:
+                    value = str(value).rstrip('\x00')
+                return value, "ok"
+        except:
+            pass
+
+        # Fall back to normal get
         value = pv.get(timeout=timeout)
         if value is None:
             return None, "no value"

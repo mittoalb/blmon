@@ -39,6 +39,20 @@ def read_pv_value(pv_name, timeout=2.0):
         if not pv.connect(timeout=timeout):
             return None, "timeout"
 
+        # Try to read as string first (for char arrays and string PVs)
+        try:
+            value = pv.get(as_string=True, timeout=timeout)
+            if value is not None:
+                # Clean up any null terminators
+                if isinstance(value, bytes):
+                    value = value.decode('utf-8', errors='ignore').rstrip('\x00')
+                else:
+                    value = str(value).rstrip('\x00')
+                return value, "ok"
+        except:
+            pass
+
+        # Fall back to normal get
         value = pv.get(timeout=timeout)
         if value is None:
             return None, "no value"
@@ -148,49 +162,63 @@ def generate_tomoscan_params_png(output_path):
     """Generate PNG showing TomoScan parameters."""
     params = get_tomoscan_params()
     
-    fig, ax = plt.subplots(figsize=(10, 8), dpi=96)
+    # Increase figure height to accommodate wrapped text
+    fig = plt.figure(figsize=(12, 10), dpi=96)
+    ax = fig.add_subplot(111)
     ax.axis('tight')
     ax.axis('off')
     
     # Title
-    fig.text(0.5, 0.95, 'TomoScan Parameters', ha='center', fontsize=18, fontweight='bold', color='#f8fafc')
+    fig.text(0.5, 0.96, 'TomoScan Parameters', ha='center', fontsize=18, fontweight='bold', color='#f8fafc')
     fig.patch.set_facecolor('#0f172a')
     
     # Timestamp
     timestamp = datetime.utcnow().isoformat() + 'Z'
-    fig.text(0.5, 0.90, f'Updated: {timestamp}', ha='center', fontsize=10, color='#94a3b8')
+    fig.text(0.5, 0.91, f'Updated: {timestamp}', ha='center', fontsize=10, color='#94a3b8')
     
-    # Build table data
-    table_data = [[k, v] for k, v in params.items()]
+    # Build table data with wrapped strings
+    table_data = []
+    for k, v in params.items():
+        # Truncate very long strings and add ellipsis
+        str_v = str(v)
+        if len(str_v) > 70:
+            str_v = str_v[:67] + '...'
+        table_data.append([k, str_v])
     
     table = ax.table(
         cellText=table_data,
         colLabels=['Parameter', 'Value'],
         cellLoc='left',
         loc='center',
-        bbox=[0.05, 0.1, 0.9, 0.75],
+        bbox=[0.05, 0.08, 0.9, 0.80],
     )
     
     table.auto_set_font_size(False)
-    table.set_fontsize(10)
-    table.scale(1, 2.5)
+    table.set_fontsize(9)
+    table.scale(1, 2.2)
     
-    # Style table
+    # Set column widths and style
     for i in range(len(table_data) + 1):
         for j in range(2):
             cell = table[(i, j)]
             if i == 0:
                 # Header
                 cell.set_facecolor('#1e293b')
-                cell.set_text_props(weight='bold', color='#f8fafc')
+                cell.set_text_props(weight='bold', color='#f8fafc', fontsize=10)
             else:
                 # Rows
                 cell.set_facecolor('#334155' if i % 2 == 0 else '#1e293b')
-                cell.set_text_props(color='#e2e8f0')
+                cell.set_text_props(color='#e2e8f0', fontsize=9)
             cell.set_edgecolor('#334155')
+            
+            # Column width
+            if j == 0:
+                cell.set_width(0.25)
+            else:
+                cell.set_width(0.65)
     
     plt.tight_layout()
-    plt.savefig(output_path, facecolor='#0f172a', edgecolor='none')
+    plt.savefig(output_path, facecolor='#0f172a', edgecolor='none', bbox_inches='tight')
     plt.close()
     print(f"✓ Saved: {output_path}")
 
@@ -199,17 +227,18 @@ def generate_recon_status_png(output_path, data_folder, last_scan_file=None):
     """Generate PNG showing reconstruction status table."""
     recon = get_recon_status(data_folder, last_scan_file)
     
-    fig, ax = plt.subplots(figsize=(12, 10), dpi=96)
+    fig = plt.figure(figsize=(14, 11), dpi=96)
+    ax = fig.add_subplot(111)
     ax.axis('tight')
     ax.axis('off')
     
     # Title
-    fig.text(0.5, 0.96, 'Reconstruction Status', ha='center', fontsize=18, fontweight='bold', color='#f8fafc')
+    fig.text(0.5, 0.97, 'Reconstruction Status', ha='center', fontsize=18, fontweight='bold', color='#f8fafc')
     fig.patch.set_facecolor('#0f172a')
     
     # Timestamp
     timestamp = datetime.utcnow().isoformat() + 'Z'
-    fig.text(0.5, 0.91, f'Updated: {timestamp}', ha='center', fontsize=10, color='#94a3b8')
+    fig.text(0.5, 0.93, f'Updated: {timestamp}', ha='center', fontsize=10, color='#94a3b8')
     
     # Summary
     if recon["available"]:
@@ -217,23 +246,27 @@ def generate_recon_status_png(output_path, data_folder, last_scan_file=None):
     else:
         summary = f"Error: {recon['message']}"
     
-    fig.text(0.5, 0.87, summary, ha='center', fontsize=9, color='#cbd5e1')
+    fig.text(0.5, 0.90, summary, ha='center', fontsize=9, color='#cbd5e1', wrap=True)
     
     if not recon["available"] or not recon["details"]:
         fig.text(0.5, 0.5, "No reconstruction data available", ha='center', fontsize=12, color='#f87171')
-        plt.savefig(output_path, facecolor='#0f172a', edgecolor='none')
+        plt.savefig(output_path, facecolor='#0f172a', edgecolor='none', bbox_inches='tight')
         plt.close()
         print(f"✓ Saved (empty): {output_path}")
         return
     
-    # Build table data
+    # Build table data with truncated filenames
     table_data = []
     for detail in recon["details"]:
+        filename = detail["filename"]
+        # Truncate long filenames
+        if len(filename) > 50:
+            filename = filename[:47] + '...'
         row = [
-            detail["filename"],
+            filename,
             detail["status"],
-            "Yes" if detail["has_try"] else "No",
-            "Yes" if detail["has_full"] else "No",
+            "✓" if detail["has_try"] else "✗",
+            "✓" if detail["has_full"] else "✗",
         ]
         table_data.append(row)
     
@@ -242,12 +275,12 @@ def generate_recon_status_png(output_path, data_folder, last_scan_file=None):
         colLabels=['Filename', 'Status', 'Try', 'Full'],
         cellLoc='left',
         loc='center',
-        bbox=[0.02, 0.08, 0.96, 0.78],
+        bbox=[0.02, 0.05, 0.96, 0.82],
     )
     
     table.auto_set_font_size(False)
-    table.set_fontsize(8.5)
-    table.scale(1, 2.0)
+    table.set_fontsize(9)
+    table.scale(1, 1.9)
     
     # Style table
     for i in range(len(table_data) + 1):
@@ -256,26 +289,33 @@ def generate_recon_status_png(output_path, data_folder, last_scan_file=None):
             if i == 0:
                 # Header
                 cell.set_facecolor('#1e293b')
-                cell.set_text_props(weight='bold', color='#f8fafc', fontsize=9)
+                cell.set_text_props(weight='bold', color='#f8fafc', fontsize=10)
             else:
                 # Rows
                 cell.set_facecolor('#334155' if i % 2 == 0 else '#1e293b')
-                cell.set_text_props(color='#e2e8f0')
+                cell.set_text_props(color='#e2e8f0', fontsize=8.5)
                 
                 # Color status cell
                 if j == 1:  # Status column
                     status = table_data[i - 1][1]
                     if status == "FULL":
-                        cell.set_text_props(color='#22c55e', weight='bold')
+                        cell.set_text_props(color='#22c55e', weight='bold', fontsize=9)
                     elif status == "TRY":
-                        cell.set_text_props(color='#f59e0b', weight='bold')
+                        cell.set_text_props(color='#f59e0b', weight='bold', fontsize=9)
                     else:
-                        cell.set_text_props(color='#ef4444', weight='bold')
+                        cell.set_text_props(color='#ef4444', weight='bold', fontsize=9)
+                
+                # Check marks
+                if j in [2, 3]:  # Try, Full columns
+                    if table_data[i - 1][j] == "✓":
+                        cell.set_text_props(color='#22c55e', weight='bold', fontsize=10)
+                    else:
+                        cell.set_text_props(color='#94a3b8', fontsize=10)
             
             cell.set_edgecolor('#334155')
     
     plt.tight_layout()
-    plt.savefig(output_path, facecolor='#0f172a', edgecolor='none')
+    plt.savefig(output_path, facecolor='#0f172a', edgecolor='none', bbox_inches='tight')
     plt.close()
     print(f"✓ Saved: {output_path}")
 
