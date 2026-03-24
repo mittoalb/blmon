@@ -194,25 +194,25 @@ HTML_TEMPLATE = """
 <!doctype html>
 <html><head><meta charset="utf-8"><title>Beamline Status</title>
 <style>
-body { font-family: Inter, Helvetica, Arial, sans-serif; margin: 0; background: #f5f7fa; color: #1f2937; }
+body { font-family: Inter, Helvetica, Arial, sans-serif; margin: 0; background: #0f172a; color: #e2e8f0; }
 .container { max-width: 1180px; margin: 1rem auto; padding: 0 12px; }
-.page-title { margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.6rem; }
+.page-title { margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.75rem; color: #f8fafc; }
 .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
-.card { background: #fff; border: 1px solid #dbe0ea; border-radius: 10px; box-shadow: 0 1px 6px rgba(15, 23, 42, 0.06); padding: 14px; }
-.card h2 { margin-top: 0; font-size: 1.05rem; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
-.small-note { color: #374151; font-size: 0.88rem; margin: 0; }
-.status-label { display: inline-block; min-width: 56px; font-weight: 700; }
-.badge { padding: 2px 8px; border-radius: 999px; font-size: 0.8rem; font-weight: 700; color: #fff; }
-.badge-green { background: #16a34a; }
+.card { background: #1e293b; border: 1px solid #334155; border-radius: 10px; box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35); padding: 16px; }
+.card h2 { margin-top: 0; font-size: 1.05rem; border-bottom: 1px solid #334155; padding-bottom: 6px; color: #f8fafc; }
+.small-note { color: #94a3b8; font-size: 0.9rem; margin: 0; }
+.status-label { display: inline-block; min-width: 56px; font-weight: 700; color: #e2e8f0; }
+.badge { padding: 4px 10px; border-radius: 999px; font-size: 0.82rem; font-weight: 700; color: #fff; }
+.badge-green { background: #22c55e; }
 .badge-orange { background: #f59e0b; }
-.badge-red { background: #dc2626; }
-.table-wrap { max-height: 360px; overflow: auto; border-radius: 8px; border: 1px solid #dbe0ea; }
-table { border-collapse: collapse; width: 100%; }
-th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #e2e8f0; }
-th { background: #f8fafc; font-size: 0.87rem; color: #334155; }
-.tooltip-small { font-size: 0.8rem; color: #6b7280; }
-#poll-interval { width: 75px; }
-.err-text { color: #b91c1c; font-weight: 600; }
+.badge-red { background: #ef4444; }
+.table-wrap { max-height: 410px; overflow: auto; border-radius: 8px; border: 1px solid #334155; }
+table { border-collapse: collapse; width: 100%; background: #0f172a; }
+th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #334155; color: #e2e8f0; }
+th { background: #1e293b; font-size: 0.88rem; color: #e2e8f0; }
+.tooltip-small { font-size: 0.8rem; color: #94a3b8; }
+#poll-interval { width: 88px; background: #0f172a; color: #e2e8f0; border: 1px solid #334155; border-radius: 5px; }
+.err-text { color: #f87171; font-weight: 600; }
 </style>
 </head><body>
 <div class="container">
